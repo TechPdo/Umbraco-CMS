@@ -8,6 +8,7 @@ import { UmbMediaPickerContext } from './media-picker.context.js';
 import type { UmbMediaPathModel } from './types.js';
 import type { UmbMediaPickerFolderPathElement } from './components/media-picker-folder-path.element.js';
 import type { UmbMediaPickerModalData, UmbMediaPickerModalValue } from './media-picker-modal.token.js';
+import { UMB_MEDIA_PICKER_CLIPBOARD_ENTRY_VALUE_TYPE } from '../../clipboard/constants.js';
 import {
 	css,
 	customElement,
@@ -29,6 +30,12 @@ import type { UmbEntityModel } from '@umbraco-cms/backoffice/entity';
 import type { UmbInteractionMemoryModel } from '@umbraco-cms/backoffice/interaction-memory';
 import type { UmbPickerContext } from '@umbraco-cms/backoffice/picker';
 import type { UUIInputEvent, UUIPaginationEvent } from '@umbraco-cms/backoffice/external/uui';
+import {
+	UMB_CLIPBOARD_CONTEXT,
+	UMB_CLIPBOARD_ENTRY_PICKER_MODAL,
+	UmbClipboardCollectionRepository,
+} from '@umbraco-cms/backoffice/clipboard';
+import { umbOpenModal } from '@umbraco-cms/backoffice/modal';
 
 import './components/index.js';
 import '@umbraco-cms/backoffice/imaging';
@@ -85,12 +92,16 @@ export class UmbMediaPickerModalElement extends UmbPickerModalBaseElement<
 	@state()
 	private _searching: boolean = false;
 
+	@state()
+	private _hasClipboardMediaEntries: boolean = false;
+
 	@query('#dropzone')
 	private _dropzone!: UmbDropzoneMediaElement;
 
 	#pagingMap = new Map<string, UmbPaginationManager>();
 	#contextCulture?: string | null;
 	#locationInteractionMemoryUnique: string = 'UmbMediaItemPickerLocation';
+	#clipboardCollectionRepository = new UmbClipboardCollectionRepository(this);
 
 	constructor() {
 		super();
@@ -149,6 +160,18 @@ export class UmbMediaPickerModalElement extends UmbPickerModalBaseElement<
 		}
 
 		this.#loadChildrenOfCurrentMediaItem();
+
+		// Check if any clipboard entries exist for the media picker.
+		try {
+			const { data } = await this.#clipboardCollectionRepository.requestCollection({
+				types: [UMB_MEDIA_PICKER_CLIPBOARD_ENTRY_VALUE_TYPE],
+				take: 1,
+			});
+			this._hasClipboardMediaEntries = (data?.total ?? data?.items?.length ?? 0) > 0;
+		} catch {
+			// If clipboard is not available for some reason, just hide the button.
+			this._hasClipboardMediaEntries = false;
+		}
 	}
 
 	// TODO: move to location manager in context
@@ -479,8 +502,75 @@ export class UmbMediaPickerModalElement extends UmbPickerModalBaseElement<
 					label=${this.localize.term('general_upload')}
 					look="outline"
 					color="default"></uui-button>
+				${this._hasClipboardMediaEntries
+					? html`<uui-button
+							@click=${this.#pasteFromClipboard}
+							label="Paste from clipboard"
+							look="outline"
+							color="default">
+							<uui-icon name="icon-clipboard-paste"></uui-icon>
+						</uui-button>`
+					: nothing}
 			</div>
 		`;
+	}
+
+	async #pasteFromClipboard() {
+		// Open the generic clipboard entry picker, filtered to media picker clipboard entries.
+		const result = await umbOpenModal(this, UMB_CLIPBOARD_ENTRY_PICKER_MODAL, {
+			data: {
+				multiple: this.data?.multiple ?? false,
+				entryTypes: [UMB_MEDIA_PICKER_CLIPBOARD_ENTRY_VALUE_TYPE],
+			},
+		});
+
+		// Filter out potential nulls from the generic picker selection type.
+		const selectedUniques = (result?.selection ?? []).filter(
+			(unique): unique is string => typeof unique === 'string' && unique.length > 0,
+		);
+
+		if (!selectedUniques.length) return;
+
+		const clipboardContext = await this.getContext(UMB_CLIPBOARD_CONTEXT);
+
+		if (!clipboardContext) {
+			throw new Error('Clipboard context not found');
+		}
+
+		const mediaKeys: string[] = [];
+
+		for (const unique of selectedUniques) {
+			const entry = await clipboardContext.read(unique);
+			if (!entry) continue;
+
+			const mediaPickerValue = entry.values.find(
+				(value) => value.type === UMB_MEDIA_PICKER_CLIPBOARD_ENTRY_VALUE_TYPE,
+			)?.value as Array<{ mediaKey: string }> | undefined;
+
+			if (!mediaPickerValue) continue;
+
+			for (const item of mediaPickerValue) {
+				if (item.mediaKey) {
+					mediaKeys.push(item.mediaKey);
+				}
+			}
+		}
+
+		if (!mediaKeys.length) return;
+
+		if (this.data?.multiple) {
+			const existingSelection = this.value?.selection ?? [];
+			const newSelection = [...new Set([...existingSelection, ...mediaKeys])];
+			this._isSelectionMode = newSelection.length > 0;
+			this.modalContext?.setValue({ selection: newSelection });
+		} else {
+			this._isSelectionMode = true;
+			this.modalContext?.setValue({ selection: [mediaKeys[0]] });
+		}
+
+		// Immediately submit the media picker modal so the chosen clipboard items
+		// are applied to the underlying media picker property.
+		this._submitModal();
 	}
 
 	#renderCard(item: UmbMediaTreeItemModel | UmbMediaSearchItemModel) {

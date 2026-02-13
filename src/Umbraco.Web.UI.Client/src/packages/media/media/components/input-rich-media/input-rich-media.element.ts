@@ -22,6 +22,8 @@ import {
 	type UmbInteractionMemoryModel,
 } from '@umbraco-cms/backoffice/interaction-memory';
 import { jsonStringComparison } from '@umbraco-cms/backoffice/observable-api';
+import { UMB_CLIPBOARD_PROPERTY_CONTEXT } from '@umbraco-cms/backoffice/clipboard';
+import { UMB_PROPERTY_CONTEXT, UMB_PROPERTY_DATASET_CONTEXT } from '@umbraco-cms/backoffice/property';
 
 type UmbRichMediaCardModel = {
 	unique: string;
@@ -428,11 +430,46 @@ export class UmbInputRichMediaElement extends UmbFormControlMixin<
 		if (this.readonly) return nothing;
 		return html`
 			<uui-action-bar slot="actions">
+				<uui-button
+					label=${this.localize.term('clipboard_labelForCopyToClipboard')}
+					look="secondary"
+					@click=${() => this.#copyToClipboard(item)}>
+					<uui-icon name="icon-clipboard-copy"></uui-icon>
+				</uui-button>
 				<uui-button label=${this.localize.term('general_remove')} look="secondary" @click=${() => this.#onRemove(item)}>
 					<uui-icon name="icon-trash"></uui-icon>
 				</uui-button>
 			</uui-action-bar>
 		`;
+	}
+
+	async #copyToClipboard(item: UmbRichMediaCardModel) {
+		const propertyDatasetContext = await this.getContext(UMB_PROPERTY_DATASET_CONTEXT);
+		const propertyContext = await this.getContext(UMB_PROPERTY_CONTEXT);
+		const clipboardContext = await this.getContext(UMB_CLIPBOARD_PROPERTY_CONTEXT);
+
+		if (!propertyContext || !clipboardContext) {
+			throw new Error('Could not get required contexts to copy.');
+		}
+
+		const workspaceName = propertyDatasetContext ? this.localize.string(propertyDatasetContext.getName()) : '';
+		const propertyLabel = this.localize.string(propertyContext.getLabel());
+		const entryName = workspaceName ? `${workspaceName} - ${propertyLabel} - ${item.name}` : `${propertyLabel} - ${item.name}`;
+
+		const matchingEntry = this.value?.find((entry) => entry.mediaKey === item.media);
+
+		if (!matchingEntry) {
+			throw new Error('Could not find media picker value for item.');
+		}
+
+		const propertyValue = [structuredClone(matchingEntry)];
+
+		await clipboardContext.write({
+			icon: item.icon,
+			name: entryName,
+			propertyValue,
+			propertyEditorUiAlias: 'Umb.PropertyEditorUi.MediaPicker',
+		});
 	}
 
 	#renderIsTrashed(item: UmbRichMediaCardModel) {
