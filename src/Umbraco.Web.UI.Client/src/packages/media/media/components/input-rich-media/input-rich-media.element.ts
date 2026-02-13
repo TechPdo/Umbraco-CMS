@@ -22,8 +22,12 @@ import {
 	type UmbInteractionMemoryModel,
 } from '@umbraco-cms/backoffice/interaction-memory';
 import { jsonStringComparison } from '@umbraco-cms/backoffice/observable-api';
-import { UMB_CLIPBOARD_PROPERTY_CONTEXT } from '@umbraco-cms/backoffice/clipboard';
+import {
+	UMB_CLIPBOARD_PROPERTY_CONTEXT,
+	UmbClipboardCollectionRepository,
+} from '@umbraco-cms/backoffice/clipboard';
 import { UMB_PROPERTY_CONTEXT, UMB_PROPERTY_DATASET_CONTEXT } from '@umbraco-cms/backoffice/property';
+import { UMB_MEDIA_PICKER_CLIPBOARD_ENTRY_VALUE_TYPE } from '../../clipboard/constants.js';
 
 type UmbRichMediaCardModel = {
 	unique: string;
@@ -179,6 +183,8 @@ export class UmbInputRichMediaElement extends UmbFormControlMixin<
 	readonly #itemManager = new UmbRepositoryItemsManager<UmbMediaItemModel>(this, UMB_MEDIA_ITEM_REPOSITORY_ALIAS);
 
 	readonly #pickerInputContext = new UmbMediaPickerInputContext(this);
+
+	readonly #clipboardCollectionRepository = new UmbClipboardCollectionRepository(this);
 
 	constructor() {
 		super();
@@ -450,6 +456,30 @@ export class UmbInputRichMediaElement extends UmbFormControlMixin<
 
 		if (!propertyContext || !clipboardContext) {
 			throw new Error('Could not get required contexts to copy.');
+		}
+
+		// Avoid adding a new clipboard entry if the same media item is already present
+		// in an existing media picker clipboard entry.
+		try {
+			const { data } = await this.#clipboardCollectionRepository.requestCollection({
+				types: [UMB_MEDIA_PICKER_CLIPBOARD_ENTRY_VALUE_TYPE],
+			});
+
+			const existingEntries = data?.items ?? [];
+			const alreadyExists = existingEntries.some((entry) =>
+				entry.values.some(
+					(value) =>
+						value.type === UMB_MEDIA_PICKER_CLIPBOARD_ENTRY_VALUE_TYPE &&
+						Array.isArray(value.value) &&
+						value.value.some((v: { mediaKey?: string }) => v.mediaKey === item.media),
+				),
+			);
+
+			if (alreadyExists) {
+				return;
+			}
+		} catch {
+			// If clipboard collection cannot be read, fall through and attempt to write.
 		}
 
 		const workspaceName = propertyDatasetContext ? this.localize.string(propertyDatasetContext.getName()) : '';
