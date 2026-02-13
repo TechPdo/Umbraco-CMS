@@ -15,7 +15,7 @@ export class UmbMediaPickerFromMediaPickerClipboardPastePropertyValueTranslator
 	}
 
 	async isCompatibleValue(
-		propertyValue: UmbMediaPickerValueModel,
+		_propertyValue: UmbMediaPickerValueModel,
 		// eslint-disable-next-line @typescript-eslint/no-unused-vars
 		config: unknown,
 		// eslint-disable-next-line @typescript-eslint/no-unused-vars
