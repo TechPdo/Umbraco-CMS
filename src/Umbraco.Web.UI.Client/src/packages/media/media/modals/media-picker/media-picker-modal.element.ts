@@ -131,37 +131,37 @@ export class UmbMediaPickerModalElement extends UmbPickerModalBaseElement<
 
 	protected override async firstUpdated(_changedProperties: PropertyValues): Promise<void> {
 		super.firstUpdated(_changedProperties);
+		await this.#initializeLocation();
+		this.#loadChildrenOfCurrentMediaItem();
+		await this.#setHasClipboardMediaEntries();
+	}
 
+	async #initializeLocation(): Promise<void> {
 		const startNode = this.data?.startNode;
 		const locationFromMemory = this.#getLocationFromInteractionMemory();
-
 		const uniquesToRequest = [startNode?.unique, locationFromMemory?.entity.unique].filter(
 			(x) => x !== null && x !== undefined,
 		);
 
-		if (uniquesToRequest.length > 0) {
-			const { data } = await this.#mediaItemRepository.requestItems(uniquesToRequest);
+		if (uniquesToRequest.length === 0) return;
 
-			this._startNode = data?.find((x) => x.unique === startNode?.unique);
-			const locationMemoryItem = data?.find((x) => x.unique === locationFromMemory?.entity.unique);
+		const { data } = await this.#mediaItemRepository.requestItems(uniquesToRequest);
+		this._startNode = data?.find((x) => x.unique === startNode?.unique);
+		const locationMemoryItem = data?.find((x) => x.unique === locationFromMemory?.entity.unique);
+		// TODO: We probably need to check if the location item is within the start node. If not then fall back to start node.
+		const source = locationMemoryItem || this._startNode;
 
-			// TODO: We probably need to check if the location item is within the start node. If not then fall back to start node.
-			const source = locationMemoryItem || this._startNode;
+		if (!source) return;
 
-			if (source) {
-				this._currentMediaEntity = {
-					name: source.name,
-					unique: source.unique,
-					entityType: source.entityType,
-				};
+		this._currentMediaEntity = {
+			name: source.name,
+			unique: source.unique,
+			entityType: source.entityType,
+		};
+		this._searchFrom = { unique: source.unique, entityType: source.entityType };
+	}
 
-				this._searchFrom = { unique: source.unique, entityType: source.entityType };
-			}
-		}
-
-		this.#loadChildrenOfCurrentMediaItem();
-
-		// Check if any clipboard entries exist for the media picker.
+	async #setHasClipboardMediaEntries(): Promise<void> {
 		try {
 			const { data } = await this.#clipboardCollectionRepository.requestCollection({
 				types: [UMB_MEDIA_PICKER_CLIPBOARD_ENTRY_VALUE_TYPE],
@@ -169,7 +169,6 @@ export class UmbMediaPickerModalElement extends UmbPickerModalBaseElement<
 			});
 			this._hasClipboardMediaEntries = (data?.total ?? data?.items?.length ?? 0) > 0;
 		} catch {
-			// If clipboard is not available for some reason, just hide the button.
 			this._hasClipboardMediaEntries = false;
 		}
 	}
@@ -505,7 +504,7 @@ export class UmbMediaPickerModalElement extends UmbPickerModalBaseElement<
 				${this._hasClipboardMediaEntries
 					? html`<uui-button
 							@click=${this.#pasteFromClipboard}
-							label="Paste from clipboard"
+							label=${this.localize.term('content_createFromClipboard')}
 							look="outline"
 							color="default">
 							<uui-icon name="icon-clipboard-paste"></uui-icon>
@@ -515,49 +514,25 @@ export class UmbMediaPickerModalElement extends UmbPickerModalBaseElement<
 		`;
 	}
 
-	async #pasteFromClipboard() {
-		// Open the generic clipboard entry picker, filtered to media picker clipboard entries.
-		const result = await umbOpenModal(this, UMB_CLIPBOARD_ENTRY_PICKER_MODAL, {
-			data: {
-				multiple: this.data?.multiple ?? false,
-				entryTypes: [UMB_MEDIA_PICKER_CLIPBOARD_ENTRY_VALUE_TYPE],
-			},
-		});
-
-		// Filter out potential nulls from the generic picker selection type.
-		const selectedUniques = (result?.selection ?? []).filter(
-			(unique): unique is string => typeof unique === 'string' && unique.length > 0,
-		);
-
-		if (!selectedUniques.length) return;
-
+	async #getMediaKeysFromClipboardEntries(selectedUniques: string[]): Promise<string[]> {
 		const clipboardContext = await this.getContext(UMB_CLIPBOARD_CONTEXT);
-
-		if (!clipboardContext) {
-			throw new Error('Clipboard context not found');
-		}
+		if (!clipboardContext) throw new Error('Clipboard context not found');
 
 		const mediaKeys: string[] = [];
-
 		for (const unique of selectedUniques) {
 			const entry = await clipboardContext.read(unique);
-			if (!entry) continue;
-
-			const mediaPickerValue = entry.values.find(
+			const mediaPickerValue = entry?.values.find(
 				(value) => value.type === UMB_MEDIA_PICKER_CLIPBOARD_ENTRY_VALUE_TYPE,
-			)?.value as Array<{ mediaKey: string }> | undefined;
+			)?.value as Array<{ mediaKey?: string }> | undefined;
 
-			if (!mediaPickerValue) continue;
-
-			for (const item of mediaPickerValue) {
-				if (item.mediaKey) {
-					mediaKeys.push(item.mediaKey);
-				}
+			if (mediaPickerValue) {
+				mediaKeys.push(...mediaPickerValue.map((item) => item.mediaKey).filter((key): key is string => !!key));
 			}
 		}
+		return mediaKeys;
+	}
 
-		if (!mediaKeys.length) return;
-
+	#applyMediaSelection(mediaKeys: string[]): void {
 		if (this.data?.multiple) {
 			const existingSelection = this.value?.selection ?? [];
 			const newSelection = [...new Set([...existingSelection, ...mediaKeys])];
@@ -567,9 +542,25 @@ export class UmbMediaPickerModalElement extends UmbPickerModalBaseElement<
 			this._isSelectionMode = true;
 			this.modalContext?.setValue({ selection: [mediaKeys[0]] });
 		}
+	}
 
-		// Immediately submit the media picker modal so the chosen clipboard items
-		// are applied to the underlying media picker property.
+	async #pasteFromClipboard() {
+		const result = await umbOpenModal(this, UMB_CLIPBOARD_ENTRY_PICKER_MODAL, {
+			data: {
+				multiple: this.data?.multiple ?? false,
+				entryTypes: [UMB_MEDIA_PICKER_CLIPBOARD_ENTRY_VALUE_TYPE],
+			},
+		});
+
+		const selectedUniques = (result?.selection ?? []).filter(
+			(unique): unique is string => typeof unique === 'string' && unique.length > 0,
+		);
+		if (!selectedUniques.length) return;
+
+		const mediaKeys = await this.#getMediaKeysFromClipboardEntries(selectedUniques);
+		if (!mediaKeys.length) return;
+
+		this.#applyMediaSelection(mediaKeys);
 		this._submitModal();
 	}
 
