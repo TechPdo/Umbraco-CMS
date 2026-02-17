@@ -17,7 +17,7 @@ import type {
 import type { UmbTemporaryFileModel } from '@umbraco-cms/backoffice/temporary-file';
 import { UMB_SERVER_CONTEXT } from '@umbraco-cms/backoffice/server';
 import { UmbFormControlMixin } from '@umbraco-cms/backoffice/validation';
-import { UMB_PROPERTY_DATASET_CONTEXT, isNameablePropertyDatasetContext } from '@umbraco-cms/backoffice/property';
+import { UMB_NAMEABLE_PROPERTY_DATASET_CONTEXT } from '@umbraco-cms/backoffice/property';
 import { UMB_MEDIA_ENTITY_TYPE } from '../../entity.js';
 
 @customElement('umb-input-upload-field')
@@ -169,9 +169,8 @@ export class UmbInputUploadFieldElement extends UmbFormControlMixin<UmbMediaValu
 	}
 
 	async #ensureMediaNameFromFile(file: File) {
-		const datasetContext = await this.getContext(UMB_PROPERTY_DATASET_CONTEXT);
+		const datasetContext = await this.getContext(UMB_NAMEABLE_PROPERTY_DATASET_CONTEXT);
 		if (!datasetContext || datasetContext.getEntityType() !== UMB_MEDIA_ENTITY_TYPE) return;
-		if (!isNameablePropertyDatasetContext(datasetContext)) return;
 
 		const currentName = datasetContext.getName();
 		if (currentName && currentName.trim() !== '') return;

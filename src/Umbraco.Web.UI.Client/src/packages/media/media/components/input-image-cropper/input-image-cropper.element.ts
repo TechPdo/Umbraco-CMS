@@ -18,7 +18,7 @@ import './image-cropper-field.element.js';
 import './image-cropper-focus-setter.element.js';
 import './image-cropper-preview.element.js';
 import './image-cropper.element.js';
-import { UMB_PROPERTY_DATASET_CONTEXT, isNameablePropertyDatasetContext } from '@umbraco-cms/backoffice/property';
+import { UMB_NAMEABLE_PROPERTY_DATASET_CONTEXT } from '@umbraco-cms/backoffice/property';
 import { UMB_MEDIA_ENTITY_TYPE } from '../../entity.js';
 
 const DefaultFocalPoint = { left: 0.5, top: 0.5 };
@@ -111,9 +111,8 @@ export class UmbInputImageCropperElement extends UmbFormControlMixin<
 	}
 
 	async #ensureMediaNameFromFile(file: File) {
-		const datasetContext = await this.getContext(UMB_PROPERTY_DATASET_CONTEXT);
+		const datasetContext = await this.getContext(UMB_NAMEABLE_PROPERTY_DATASET_CONTEXT);
 		if (!datasetContext || datasetContext.getEntityType() !== UMB_MEDIA_ENTITY_TYPE) return;
-		if (!isNameablePropertyDatasetContext(datasetContext)) return;
 
 		const currentName = datasetContext.getName();
 		if (currentName && currentName.trim() !== '') return;
