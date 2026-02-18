@@ -1,3 +1,4 @@
+import type { UmbStaticFileItemModel } from '../../repository/item/types.js';
 import type { UmbInputStaticFileElement } from '../../components/index.js';
 import type {
 	UmbPropertyEditorUiElement,
@@ -18,6 +19,12 @@ export class UmbPropertyEditorUIStaticFilePickerElement extends UmbLitElement im
 
 	@state()
 	private _value?: string | Array<string>;
+
+	@state()
+	private _allowedFileExtensions?: Array<string>;
+
+	@state()
+	private _disallowedFileExtensions?: Array<string>;
 
 	@property({ attribute: false })
 	public set value(value: string | Array<string> | undefined) {
@@ -43,6 +50,9 @@ export class UmbPropertyEditorUIStaticFilePickerElement extends UmbLitElement im
 		this.#singleItemMode = config?.getValueByAlias<boolean>('singleItemMode') ?? false;
 		const validationLimit = config?.getValueByAlias<UmbNumberRangeValueType>('validationLimit');
 
+		this._allowedFileExtensions = config?.getValueByAlias<Array<string>>('allowedFileExtensions');
+		this._disallowedFileExtensions = config?.getValueByAlias<Array<string>>('disallowedFileExtensions');
+
 		this._limitMin = validationLimit?.min ?? 0;
 		this._limitMax = this.#singleItemMode ? 1 : (validationLimit?.max ?? Infinity);
 	}
@@ -51,6 +61,39 @@ export class UmbPropertyEditorUIStaticFilePickerElement extends UmbLitElement im
 	private _limitMin: number = 0;
 	@state()
 	private _limitMax: number = Infinity;
+
+	#pickableFilter: (item: UmbStaticFileItemModel) => boolean = (item) => {
+		const path = this.#serverFilePathUniqueSerializer.toServerPath(item.unique) ?? '';
+
+		const hasExtensionFilters =
+			(!!this._allowedFileExtensions && this._allowedFileExtensions.length > 0) ||
+			(!!this._disallowedFileExtensions && this._disallowedFileExtensions.length > 0);
+
+		// Folders should always be available for navigation/expansion in the tree,
+		// but when file extension filters are applied we should not allow selecting folders as a value.
+		if (item.isFolder) {
+			return !hasExtensionFilters;
+		}
+
+		const lastDotIndex = path.lastIndexOf('.');
+		const extension = lastDotIndex !== -1 ? path.substring(lastDotIndex).toLowerCase() : '';
+
+		if (this._allowedFileExtensions && this._allowedFileExtensions.length > 0) {
+			const normalizedAllowed = this._allowedFileExtensions.map((ext) => ext.toLowerCase());
+			if (!extension || !normalizedAllowed.includes(extension)) {
+				return false;
+			}
+		}
+
+		if (this._disallowedFileExtensions && this._disallowedFileExtensions.length > 0) {
+			const normalizedDisallowed = this._disallowedFileExtensions.map((ext) => ext.toLowerCase());
+			if (extension && normalizedDisallowed.includes(extension)) {
+				return false;
+			}
+		}
+
+		return true;
+	};
 
 	private _onChange(event: CustomEvent) {
 		if (this.#singleItemMode) {
@@ -65,6 +108,7 @@ export class UmbPropertyEditorUIStaticFilePickerElement extends UmbLitElement im
 	override render() {
 		return html`
 			<umb-input-static-file
+				.pickableFilter=${this._allowedFileExtensions || this._disallowedFileExtensions ? this.#pickableFilter : undefined}
 				.selection=${this._value ? (Array.isArray(this._value) ? this._value : [this._value]) : []}
 				.min=${this._limitMin ?? 0}
 				.max=${this._limitMax ?? Infinity}

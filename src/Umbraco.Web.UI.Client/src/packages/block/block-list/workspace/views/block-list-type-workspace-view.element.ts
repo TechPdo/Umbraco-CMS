@@ -68,6 +68,10 @@ export class UmbBlockListTypeWorkspaceViewSettingsElement extends UmbLitElement 
 							alias: 'singleItemMode',
 							value: true,
 						},
+						{
+							alias: 'allowedFileExtensions',
+							value: ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg'],
+						},
 					]}></umb-property>
 			</uui-box>
 			<uui-box headline=${this.localize.term('blockEditor_headlineAdvanced')}>
