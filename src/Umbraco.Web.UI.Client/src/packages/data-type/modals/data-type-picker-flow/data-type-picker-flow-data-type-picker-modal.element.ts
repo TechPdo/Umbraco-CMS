@@ -83,7 +83,7 @@ export class UmbDataTypePickerFlowDataTypePickerModalElement extends UmbModalBas
 							<uui-button label=${dataType.name} @click=${() => this.#handleClick(dataType)}>
 								<div class="item-content">
 									<umb-icon name=${dataType.icon ?? 'icon-circle-dotted'} class="icon"></umb-icon>
-									${dataType.name}
+									<span class="label" title=${dataType.name}>${dataType.name}</span>
 								</div>
 							</uui-button>
 						</li>
@@ -198,6 +198,13 @@ export class UmbDataTypePickerFlowDataTypePickerModalElement extends UmbModalBas
 			}
 			#create-button:not(:first-child) {
 				margin-top: var(--uui-size-layout-1);
+			}
+			#item-grid .item .label {
+				max-width: 100%;
+				display: -webkit-box;
+				-webkit-line-clamp: 2;
+				-webkit-box-orient: vertical;  
+				overflow: hidden;
 			}
 		`,
 	];

@@ -382,7 +382,7 @@ export class UmbDataTypePickerFlowModalElement extends UmbModalBaseElement<
 		return html`
 			<div class="item-content">
 				<umb-icon name=${propertyEditorUI.meta.icon} class="icon"></umb-icon>
-				${label}
+				<span class="label" title=${label}>${label}</span>
 			</div>
 		`;
 	}
@@ -398,7 +398,7 @@ export class UmbDataTypePickerFlowModalElement extends UmbModalBaseElement<
 							<uui-button .label=${dataType.name} type="button" @click=${() => this.#handleDataTypeClick(dataType)}>
 								<div class="item-content">
 									<umb-icon name=${dataType.icon ?? 'icon-circle-dotted'} class="icon"></umb-icon>
-									${dataType.name}
+									<span class="label" title=${dataType.name}>${dataType.name}</span>
 								</div>
 							</uui-button>
 						</li>
@@ -478,7 +478,14 @@ export class UmbDataTypePickerFlowModalElement extends UmbModalBaseElement<
 				font-size: 2em;
 				margin: auto;
 			}
-
+			#item-grid .item .label {
+				max-width: 100%;
+				min-width: 0;
+				display: -webkit-box;
+				-webkit-line-clamp: 2;
+				-webkit-box-orient: vertical;
+				overflow: hidden;
+			}
 			.category-name {
 				text-transform: capitalize;
 			}
