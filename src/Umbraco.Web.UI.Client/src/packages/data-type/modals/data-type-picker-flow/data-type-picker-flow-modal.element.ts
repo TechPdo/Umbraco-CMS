@@ -467,8 +467,10 @@ export class UmbDataTypePickerFlowModalElement extends UmbModalBaseElement<
 
 				padding: var(--uui-size-space-2);
 
-				display: grid;
-				grid-template-rows: 40px 1fr;
+				display: flex;
+				flex-direction: column;
+				align-items: center;
+				justify-content: flex-start;
 				height: 100%;
 				width: 100%;
 				word-break: break-word;
@@ -476,7 +478,7 @@ export class UmbDataTypePickerFlowModalElement extends UmbModalBaseElement<
 
 			#item-grid .item .icon {
 				font-size: 2em;
-				margin: auto;
+				margin-bottom: var(--uui-size-space-2);
 			}
 			#item-grid .item .label {
 				max-width: 100%;

@@ -202,7 +202,7 @@ export class UmbPropertyEditorUIPickerModalElement extends UmbModalBaseElement<
 				display: flex;
 				align-items: center;
 				flex-direction: column;
-				justify-content: center;
+				justify-content: flex-start;
 				font-size: 0.8rem;
 				height: 100%;
 				width: 100%;
