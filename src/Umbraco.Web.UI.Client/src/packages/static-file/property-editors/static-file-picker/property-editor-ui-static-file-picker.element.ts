@@ -59,16 +59,27 @@ export class UmbPropertyEditorUIStaticFilePickerElement extends UmbLitElement im
 		this.#singleItemMode = config?.getValueByAlias<boolean>('singleItemMode') ?? false;
 		const validationLimit = config?.getValueByAlias<UmbNumberRangeValueType>('validationLimit');
 
+		this.#applyExtensionConfig(config);
+		this.#applyValidationLimits(validationLimit);
+	}
+
+	#applyExtensionConfig(config: UmbPropertyEditorConfigCollection | undefined): void {
 		this._allowedFileExtensions = config?.getValueByAlias<Array<string>>('allowedFileExtensions');
 		this._disallowedFileExtensions = config?.getValueByAlias<Array<string>>('disallowedFileExtensions');
 
 		this._normalizedAllowedFileExtensions = this.#normalizeExtensions(this._allowedFileExtensions);
 		this._normalizedDisallowedFileExtensions = this.#normalizeExtensions(this._disallowedFileExtensions);
 
-		this._hasExtensionFilters =
-			(this._normalizedAllowedFileExtensions?.length ?? 0) > 0 ||
-			(this._normalizedDisallowedFileExtensions?.length ?? 0) > 0;
+		this._hasExtensionFilters = this.#computeHasExtensionFilters();
+	}
 
+	#computeHasExtensionFilters(): boolean {
+		const hasAllowed = (this._normalizedAllowedFileExtensions?.length ?? 0) > 0;
+		const hasDisallowed = (this._normalizedDisallowedFileExtensions?.length ?? 0) > 0;
+		return hasAllowed || hasDisallowed;
+	}
+
+	#applyValidationLimits(validationLimit: UmbNumberRangeValueType | undefined): void {
 		this._limitMin = validationLimit?.min ?? 0;
 		this._limitMax = this.#singleItemMode ? 1 : (validationLimit?.max ?? Infinity);
 	}
