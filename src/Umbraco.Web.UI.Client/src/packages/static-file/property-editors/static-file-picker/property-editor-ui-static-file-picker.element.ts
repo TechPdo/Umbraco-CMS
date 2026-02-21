@@ -26,6 +26,15 @@ export class UmbPropertyEditorUIStaticFilePickerElement extends UmbLitElement im
 	@state()
 	private _disallowedFileExtensions?: Array<string>;
 
+	@state()
+	private _normalizedAllowedFileExtensions?: Array<string>;
+
+	@state()
+	private _normalizedDisallowedFileExtensions?: Array<string>;
+
+	@state()
+	private _hasExtensionFilters = false;
+
 	@property({ attribute: false })
 	public set value(value: string | Array<string> | undefined) {
 		if (Array.isArray(value)) {
@@ -53,6 +62,13 @@ export class UmbPropertyEditorUIStaticFilePickerElement extends UmbLitElement im
 		this._allowedFileExtensions = config?.getValueByAlias<Array<string>>('allowedFileExtensions');
 		this._disallowedFileExtensions = config?.getValueByAlias<Array<string>>('disallowedFileExtensions');
 
+		this._normalizedAllowedFileExtensions = this.#normalizeExtensions(this._allowedFileExtensions);
+		this._normalizedDisallowedFileExtensions = this.#normalizeExtensions(this._disallowedFileExtensions);
+
+		this._hasExtensionFilters =
+			(this._normalizedAllowedFileExtensions?.length ?? 0) > 0 ||
+			(this._normalizedDisallowedFileExtensions?.length ?? 0) > 0;
+
 		this._limitMin = validationLimit?.min ?? 0;
 		this._limitMax = this.#singleItemMode ? 1 : (validationLimit?.max ?? Infinity);
 	}
@@ -62,34 +78,48 @@ export class UmbPropertyEditorUIStaticFilePickerElement extends UmbLitElement im
 	@state()
 	private _limitMax: number = Infinity;
 
+	#normalizeExtensions(extensions?: Array<string>): Array<string> | undefined {
+		return extensions?.map((ext) => ext.toLowerCase());
+	}
+
+	#getExtension(path: string): string {
+		const lastDotIndex = path.lastIndexOf('.');
+		return lastDotIndex !== -1 ? path.substring(lastDotIndex).toLowerCase() : '';
+	}
+
+	#isExtensionAllowed(extension: string): boolean {
+		if (!this._normalizedAllowedFileExtensions || this._normalizedAllowedFileExtensions.length === 0) {
+			return true;
+		}
+
+		return !!extension && this._normalizedAllowedFileExtensions.includes(extension);
+	}
+
+	#isExtensionNotDisallowed(extension: string): boolean {
+		if (!this._normalizedDisallowedFileExtensions || this._normalizedDisallowedFileExtensions.length === 0) {
+			return true;
+		}
+
+		return !extension || !this._normalizedDisallowedFileExtensions.includes(extension);
+	}
+
 	#pickableFilter: (item: UmbStaticFileItemModel) => boolean = (item) => {
 		const path = this.#serverFilePathUniqueSerializer.toServerPath(item.unique) ?? '';
-
-		const hasExtensionFilters =
-			(!!this._allowedFileExtensions && this._allowedFileExtensions.length > 0) ||
-			(!!this._disallowedFileExtensions && this._disallowedFileExtensions.length > 0);
 
 		// Folders should always be available for navigation/expansion in the tree,
 		// but when file extension filters are applied we should not allow selecting folders as a value.
 		if (item.isFolder) {
-			return !hasExtensionFilters;
+			return !this._hasExtensionFilters;
 		}
 
-		const lastDotIndex = path.lastIndexOf('.');
-		const extension = lastDotIndex !== -1 ? path.substring(lastDotIndex).toLowerCase() : '';
+		const extension = this.#getExtension(path);
 
-		if (this._allowedFileExtensions && this._allowedFileExtensions.length > 0) {
-			const normalizedAllowed = this._allowedFileExtensions.map((ext) => ext.toLowerCase());
-			if (!extension || !normalizedAllowed.includes(extension)) {
-				return false;
-			}
+		if (!this.#isExtensionAllowed(extension)) {
+			return false;
 		}
 
-		if (this._disallowedFileExtensions && this._disallowedFileExtensions.length > 0) {
-			const normalizedDisallowed = this._disallowedFileExtensions.map((ext) => ext.toLowerCase());
-			if (extension && normalizedDisallowed.includes(extension)) {
-				return false;
-			}
+		if (!this.#isExtensionNotDisallowed(extension)) {
+			return false;
 		}
 
 		return true;
